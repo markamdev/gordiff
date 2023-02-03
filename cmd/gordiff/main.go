@@ -133,15 +133,15 @@ func runSignature(params []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open input file: %w", err)
 	}
-	logrus.Debugf("file data: %+v", *inFile)
 	defer inFile.Close()
 
 	sigFile, err := files.GetOutputFile(params[2])
 	if err != nil {
 		return fmt.Errorf("failed to open file for signature: %w", err)
 	}
-	logrus.Debugf("file data: %+v", *sigFile)
 	defer sigFile.Close()
 
-	return hashing.GenerateSignature(inFile, sigFile)
+	signer := hashing.NewSigGen(2048)
+
+	return signer.Compute(inFile, sigFile)
 }
