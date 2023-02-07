@@ -1,6 +1,7 @@
 package hashing
 
 import (
+	"encoding/binary"
 	"fmt"
 	"hash"
 	"io"
@@ -21,6 +22,7 @@ func NewSigGen(blockSize int) SigGen {
 		md4hasher:    md4.New(),
 		weakSumLen:   4,
 		strongSumLen: 8,
+		roller:       NewSimpleRoller(),
 	}
 }
 
@@ -29,6 +31,7 @@ type sgen struct {
 	md4hasher    hash.Hash
 	weakSumLen   int
 	strongSumLen int
+	roller       RollSum
 }
 
 // GenerateSignature ...
@@ -44,25 +47,30 @@ func (s *sgen) Compute(inFile io.Reader, sigFile io.Writer) error {
 	for {
 		logrus.Debug("- new block processing")
 		s.md4hasher.Reset()
+		s.roller.Init()
 		rdCnt, _ := inFile.Read(buffer)
 		if rdCnt == 0 {
 			// exit due to empty buffer
 			break
 		}
 
+		// compute strong sum
 		mdCnt, err := s.md4hasher.Write(buffer[:rdCnt])
 		if mdCnt != rdCnt || err != nil {
 			return fmt.Errorf("failed to compute md4: %w", err)
 		}
 
-		// save weak sum
-		wSumBuffer := make([]byte, s.weakSumLen)
+		//compute weak sum
+		s.roller.Update(buffer[:rdCnt])
+		wSumBuffer := s.roller.Digest()
+
+		// save weak sum for this block to file
 		wrCnt, err := sigFile.Write(wSumBuffer)
 		if wrCnt != s.weakSumLen || err != nil {
 			return fmt.Errorf("failed to write weak sum: %w", err)
 		}
 
-		// save storng sum
+		// save strong sum for this block to file
 		mdSum := s.md4hasher.Sum(nil)
 		wrCnt, err = sigFile.Write(mdSum[:s.strongSumLen]) // need only first half of computed sum
 
@@ -82,8 +90,14 @@ func (s *sgen) writeHeader(out io.Writer) error {
 	logrus.Debug("- header writing")
 
 	headerBuff := make([]byte, 12)
-	headerBuff[0] = 'M'
-	headerBuff[1] = 'K'
+	// hardcoded values compatible with RDIFF
+	headerBuff[0] = 'r'
+	headerBuff[1] = 's'
+	headerBuff[2] = 0x01 // signature file
+	headerBuff[3] = 0x36 // rollsum + MD4 alghorithms
+	// ======
+	binary.BigEndian.PutUint32(headerBuff[4:], uint32(s.blockSize))
+	binary.BigEndian.PutUint32(headerBuff[8:], uint32(s.strongSumLen))
 
 	n, err := out.Write(headerBuff)
 	if n != len(headerBuff) || err != nil {
@@ -91,10 +105,4 @@ func (s *sgen) writeHeader(out io.Writer) error {
 	}
 
 	return nil
-}
-
-func generateMD4() string {
-	md4obj := md4.New()
-
-	return fmt.Sprint("BlockSize:", md4obj.BlockSize(), "SumSize:", md4obj.Size())
 }

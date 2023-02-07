@@ -21,9 +21,11 @@ func main() {
 
 	helpRequest := false
 	verboseRun := false
+	forcedRun := false
 
 	flag.BoolVar(&helpRequest, "help", false, "print help message")
 	flag.BoolVar(&verboseRun, "verbose", false, "launch verbose messages")
+	flag.BoolVar(&forcedRun, "force", false, "overwrite output file if exists")
 	flag.Parse()
 
 	if verboseRun {
@@ -34,6 +36,7 @@ func main() {
 
 	if helpRequest {
 		printUsage()
+		// save weak sum
 		os.Exit(exitSuccess)
 	}
 
@@ -44,16 +47,19 @@ func main() {
 		os.Exit(exitInvalidOptions)
 	}
 
+	opts := &appOptions{forceMode: forcedRun}
+
 	var err error
 	switch params[0] {
 	case modeDelta:
 		logrus.Debug("delta mode selected")
-		err = runDelta(params)
+		err = runDelta(params, opts)
 	case modeSingature:
 		logrus.Debug("signature mode selected")
-		err = runSignature(params)
+		err = runSignature(params, opts)
 	default:
 		printUsage()
+		// save weak sum
 		os.Exit(exitInvalidOptions)
 	}
 
@@ -72,7 +78,7 @@ func main() {
 
 func printUsage() {
 	fmt.Fprintf(os.Stderr, `
-GoRDIFF - rdiff-like tool written in Golang
+GoRDIFF - rdiff-like tool written in Go(lang)
 
 Usage:
 	%s [OPTIONS] signature [input_file [signature_file]]
@@ -80,6 +86,8 @@ Usage:
 
 Options:
 	-verbose 	enable printing logs for each execution step
+	-force		overwrite output file if exists
+
 	-help		print this message
 
 Notes:
@@ -92,7 +100,7 @@ Notes:
 		os.Args[0], os.Args[0])
 }
 
-func runDelta(params []string) error {
+func runDelta(params []string, opts *appOptions) error {
 	if len(params) != 4 {
 		printUsage()
 		return common.ErrInvalidParams
@@ -114,7 +122,7 @@ func runDelta(params []string) error {
 	}
 	defer newFile.Close()
 
-	deltaFile, err := files.GetOutputFile(params[3])
+	deltaFile, err := files.GetOutputFile(params[3], opts.forceMode)
 	if err != nil {
 		return fmt.Errorf("failed to open file for delta: %w", err)
 	}
@@ -123,7 +131,7 @@ func runDelta(params []string) error {
 	return hashing.GenerateDelta(sigFile, newFile, deltaFile)
 }
 
-func runSignature(params []string) error {
+func runSignature(params []string, opts *appOptions) error {
 	if len(params) != 3 {
 		printUsage()
 		return common.ErrInvalidParams
@@ -135,7 +143,7 @@ func runSignature(params []string) error {
 	}
 	defer inFile.Close()
 
-	sigFile, err := files.GetOutputFile(params[2])
+	sigFile, err := files.GetOutputFile(params[2], opts.forceMode)
 	if err != nil {
 		return fmt.Errorf("failed to open file for signature: %w", err)
 	}

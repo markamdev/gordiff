@@ -10,3 +10,8 @@ const (
 	modeDelta     = "delta"
 	modeSingature = "signature"
 )
+
+type appOptions struct {
+	forceMode bool
+	blocSize  int
+}

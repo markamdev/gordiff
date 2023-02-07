@@ -37,14 +37,14 @@ func GetInputFile(path string) (*os.File, error) {
 }
 
 // GetOutputFile ...
-func GetOutputFile(path string) (*os.File, error) {
+func GetOutputFile(path string, overwrite bool) (*os.File, error) {
 	logrus.Debugf("opening output file '%s", path)
 	if path == "--" {
 		return os.Stdout, nil
 	}
 
 	_, err := os.Stat(path)
-	if err == nil {
+	if err == nil && !overwrite {
 		// there should be error returned
 		logrus.Error("file already exists") // it can be also dir but this has no meaning
 		return nil, common.ErrFileExists
